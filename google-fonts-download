@@ -2,6 +2,7 @@
 
 from urllib.request import urlopen
 from urllib.parse import quote_plus
+from urllib.error import HTTPError
 from functools import cache
 import json
 import os
@@ -22,11 +23,16 @@ def _skip_first_line(string):
 
 
 def get_or_exit(url):
-    response = urlopen(url)
-    if not response.getcode() == 200:
-        logger.error('Failed to download from Google Fonts')
+    try:
+        response = urlopen(url)
+        if not response.getcode() == 200:
+            logger.error(f'Expected status code 200 but got {response.getcode()}')
+            exit(2)
+        return response
+    except HTTPError as e:
+        logger.error(f'Failed to download from Google Fonts: {str(e)}')
         exit(2)
-    return response
+        
 
 
 class FontDownload:
@@ -60,8 +66,9 @@ class FontDownload:
             if any([wildcard in file['filename'] for wildcard in self.skip]):
                 continue
 
-            os.makedirs(self.workdir + '/' + os.path.dirname(file['filename']), exist_ok=True)
-            with open(self.workdir + '/' + file['filename'], 'bw') as fp:
+            download_path = self.workdir + '/' + file['filename']
+            os.makedirs(os.path.dirname(download_path), exist_ok=True)
+            with open(download_path, 'bw') as fp:
                 response = get_or_exit(file['url'])
                 fp.write(response.read())
         logger.info('Font files downloaded')
